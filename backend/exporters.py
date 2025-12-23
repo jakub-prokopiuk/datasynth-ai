@@ -1,54 +1,62 @@
 import csv
 import io
+import zipfile
 from typing import List, Dict, Any
 
 class DataExporter:
     @staticmethod
-    def to_csv(data: List[Dict[str, Any]]) -> str:
+    def to_csv_zip(tables_data: Dict[str, List[Dict[str, Any]]]) -> bytes:
         """
-        Converts list of dicts to CSV string.
+        Creates a ZIP file containing a CSV file for each table.
         """
-        if not data:
-            return ""
+        zip_buffer = io.BytesIO()
         
-        output = io.StringIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for table_name, rows in tables_data.items():
+                if not rows:
+                    continue
+                
+                csv_buffer = io.StringIO()
+                headers = rows[0].keys()
+                writer = csv.DictWriter(csv_buffer, fieldnames=headers)
+                writer.writeheader()
+                writer.writerows(rows)
+                
+                zip_file.writestr(f"{table_name}.csv", csv_buffer.getvalue())
         
-        headers = data[0].keys()
-        
-        writer = csv.DictWriter(output, fieldnames=headers)
-        writer.writeheader()
-        writer.writerows(data)
-        
-        return output.getvalue()
+        return zip_buffer.getvalue()
 
     @staticmethod
-    def to_sql(data: List[Dict[str, Any]], table_name: str = "generated_data") -> str:
+    def to_sql(tables_data: Dict[str, List[Dict[str, Any]]]) -> str:
         """
-        Converts list of dicts to SQL INSERT statements.
-        Example: INSERT INTO table (col1, col2) VALUES ('val1', 'val2');
+        Converts multiple tables to a single SQL script string.
         """
-        if not data:
-            return ""
+        all_sql_statements = []
 
-        headers = list(data[0].keys())
-        columns = ", ".join(headers)
-        
-        sql_statements = []
+        for table_name, rows in tables_data.items():
+            if not rows:
+                continue
 
-        for row in data:
-            values = []
-            for header in headers:
-                val = row.get(header)
-                if val is None:
-                    values.append("NULL")
-                elif isinstance(val, (int, float)):
-                    values.append(str(val))
-                else:
-                    clean_val = str(val).replace("'", "''")
-                    values.append(f"'{clean_val}'")
+            all_sql_statements.append(f"-- Table: {table_name}")
+            headers = list(rows[0].keys())
+            columns = ", ".join(headers)
             
-            value_str = ", ".join(values)
-            statement = f"INSERT INTO {table_name} ({columns}) VALUES ({value_str});"
-            sql_statements.append(statement)
+            for row in rows:
+                values = []
+                for header in headers:
+                    val = row.get(header)
+                    if val is None:
+                        values.append("NULL")
+                    elif isinstance(val, (int, float)):
+                        values.append(str(val))
+                    else:
+                        clean_val = str(val).replace("'", "''")
+                        values.append(f"'{clean_val}'")
+                
+                value_str = ", ".join(values)
+                statement = f"INSERT INTO {table_name} ({columns}) VALUES ({value_str});"
+                all_sql_statements.append(statement)
+            
+            all_sql_statements.append("")
 
-        return "\n".join(sql_statements)
+        return "\n".join(all_sql_statements)
