@@ -4,7 +4,7 @@ import { Database, Play, HelpCircle } from 'lucide-react';
 import { colors } from './theme';
 
 import GlobalConfig from './components/GlobalConfig';
-import SchemaBuilder from './components/SchemaBuilder';
+import SchemaBuilder from './components/schema/SchemaBuilder';
 import FieldList from './components/FieldList';
 import OutputDisplay from './components/OutputDisplay';
 import HelpModal from './components/HelpModal';

@@ -4,6 +4,8 @@ from models import GeneratorRequest
 from openai import OpenAI
 import random
 import rstr
+from jinja2 import Environment, BaseLoader
+from unidecode import unidecode
 
 class DotAccessWrapper:
     def __init__(self, data: Dict[str, Any]):
@@ -17,19 +19,35 @@ class DotAccessWrapper:
 
 class DataEngine:
     def __init__(self):
-        self.default_faker = Faker()
-        self.client = OpenAI() 
+        self.faker = Faker()
+        self.client = OpenAI()
+        
+        self.jinja_env = Environment(loader=BaseLoader())
+        
+        def filter_slugify(value, separator="."):
+            if not isinstance(value, str): return str(value)
+            clean = unidecode(value).lower().strip()
+            return clean.replace(" ", separator)
+            
+        def filter_first_letter(value):
+            if not isinstance(value, str) or not value: return ""
+            return unidecode(value[0]).lower()
 
-    def _generate_faker_value(self, params: Dict[str, Any], faker_instance: Faker) -> Any:
-        method_name = params.get("method")
-        if not method_name: return None
-        if not hasattr(faker_instance, method_name): return f"Error: Faker method '{method_name}' not found"
-        faker_method = getattr(faker_instance, method_name)
-        kwargs = params.get("kwargs", {})
+        self.jinja_env.filters['slugify'] = filter_slugify
+        self.jinja_env.filters['first_letter'] = filter_first_letter
+
+    def _generate_template_value(self, params: Dict[str, Any], current_row_context: Dict[str, Any]) -> str:
+        template_str = params.get("template", "")
         try:
-            return faker_method(**kwargs)
+            template = self.jinja_env.from_string(template_str)
+            return template.render(**current_row_context)
         except Exception as e:
-            return f"Error: {str(e)}"
+            return f"Error: Template failed {str(e)}"
+
+    def _generate_regex_value(self, params: Dict[str, Any]) -> str:
+        pattern = params.get("pattern", r"[A-Z]{3}-\d{3}")
+        try: return rstr.xeger(pattern)
+        except Exception as e: return f"Error: Invalid Regex {str(e)}"
 
     def _generate_timestamp_value(self, params: Dict[str, Any], faker_instance: Faker) -> str:
         start = params.get("min_date", "-1y") 
@@ -40,14 +58,7 @@ class DataEngine:
             if fmt == "iso": return dt.isoformat()
             elif fmt == "timestamp": return str(dt.timestamp())
             else: return dt.strftime(fmt)
-        except Exception as e:
-            return f"Error: Date gen failed {str(e)}"
-
-    
-    def _generate_regex_value(self, params: Dict[str, Any]) -> str:
-        pattern = params.get("pattern", r"[A-Z]{3}-\d{3}")
-        try: return rstr.xeger(pattern)
-        except Exception as e: return f"Error: Invalid Regex {str(e)}"
+        except Exception as e: return f"Error: Date gen failed {str(e)}"
 
     def _generate_integer_value(self, params: Dict[str, Any]) -> int:
         min_val = params.get("min", 0)
@@ -58,6 +69,15 @@ class DataEngine:
     def _generate_boolean_value(self, params: Dict[str, Any]) -> bool:
         probability = params.get("probability", 50)
         return random.random() * 100 < probability
+
+    def _generate_faker_value(self, params: Dict[str, Any], faker_instance: Faker) -> Any:
+        method_name = params.get("method")
+        if not method_name: return None
+        if not hasattr(faker_instance, method_name): return f"Error: Faker method '{method_name}' not found"
+        faker_method = getattr(faker_instance, method_name)
+        kwargs = params.get("kwargs", {})
+        try: return faker_method(**kwargs)
+        except Exception as e: return f"Error: {str(e)}"
 
     def _generate_distribution_value(self, params: Dict[str, Any]) -> Any:
         options = params.get("options")
@@ -141,10 +161,8 @@ class DataEngine:
         ordered_tables = self._resolve_generation_order(request.tables)
 
         requested_locale = request.config.locale or "en_US"
-        try:
-            job_faker = Faker(requested_locale)
-        except Exception:
-            job_faker = Faker("en_US")
+        try: job_faker = Faker(requested_locale)
+        except Exception: job_faker = Faker("en_US")
 
         for table in ordered_tables:
             table_rows = []
@@ -167,11 +185,8 @@ class DataEngine:
                     while attempts < max_retries:
                         generated_val = None
                         
-                        if field.type == "faker": 
-                            generated_val = self._generate_faker_value(field.params, job_faker)
-                        elif field.type == "timestamp":
-                            generated_val = self._generate_timestamp_value(field.params, job_faker)
-                        
+                        if field.type == "faker": generated_val = self._generate_faker_value(field.params, job_faker)
+                        elif field.type == "timestamp": generated_val = self._generate_timestamp_value(field.params, job_faker)
                         elif field.type == "foreign_key":
                             result = self._generate_foreign_key_value(field.params, generated_tables_data, current_avoid_list)
                             if result and not isinstance(result, str):
@@ -184,7 +199,8 @@ class DataEngine:
                         elif field.type == "boolean": generated_val = self._generate_boolean_value(field.params)
                         elif field.type == "regex": generated_val = self._generate_regex_value(field.params)
                         elif field.type == "llm": generated_val = self._generate_llm_value(field.params, context_data, current_avoid_list, attempts)
-
+                        elif field.type == "template": generated_val = self._generate_template_value(field.params, context_data)
+                        
                         if field.is_unique:
                             if generated_val not in unique_tracker[field.name] and "Error" not in str(generated_val):
                                 unique_tracker[field.name].add(generated_val)

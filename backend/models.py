@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 
-FieldType = Literal["faker", "llm", "distribution", "foreign_key", "integer", "boolean", "regex", "timestamp"]
+FieldType = Literal["faker", "llm", "distribution", "foreign_key", "integer", "boolean", "regex", "timestamp", "template"]
 
 class FieldSchema(BaseModel):
     name: str = Field(..., description="Name of field in the resulting dataset")
