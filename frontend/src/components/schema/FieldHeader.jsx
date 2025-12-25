@@ -1,4 +1,5 @@
 import { colors } from '../../theme';
+import TypeSelector from './TypeSelector';
 
 function FieldHeader({ name, type, isEditing, onNameChange, onTypeChange }) {
     return (
@@ -12,26 +13,16 @@ function FieldHeader({ name, type, isEditing, onNameChange, onTypeChange }) {
                     placeholder="e.g. user_id"
                     value={name}
                     onChange={(e) => onNameChange(e.target.value)}
-                    className={`w-full p-2 rounded-md ${colors.bgPanel} border ${colors.border} text-sm text-white focus:border-blue-500 outline-none`}
+                    className={`w-full p-2.5 rounded-md ${colors.bgPanel} border ${colors.border} text-sm text-white focus:border-blue-500 outline-none h-[42px]`}
                 />
             </div>
             <div className="col-span-1">
                 <label className={`block text-[10px] uppercase font-bold ${colors.textMuted} mb-1`}>Type</label>
-                <select
+
+                <TypeSelector
                     value={type}
-                    onChange={(e) => onTypeChange(e.target.value)}
-                    className={`w-full p-2 rounded-md ${colors.bgPanel} border ${colors.border} text-sm text-white focus:border-blue-500 outline-none`}
-                >
-                    <option value="faker">Faker</option>
-                    <option value="llm">AI / LLM</option>
-                    <option value="template">Derived / Logic</option>
-                    <option value="integer">Number (Int)</option>
-                    <option value="boolean">Boolean</option>
-                    <option value="regex">Regex Pattern</option>
-                    <option value="timestamp">Timestamp</option>
-                    <option value="distribution">Distro</option>
-                    <option value="foreign_key">Relation (FK)</option>
-                </select>
+                    onChange={onTypeChange}
+                />
             </div>
         </div>
     );

@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { LayoutTemplate, Link2 } from 'lucide-react';
 import { colors } from '../../../theme';
+import CustomSelect from '../../ui/CustomSelect';
+
+const PRESET_OPTIONS = [
+    { value: "custom", label: "Custom (Write Code)" },
+    { value: "email", label: "Email from Name" },
+    { value: "username", label: "Username from Name" }
+];
 
 function TemplateParams({ params, onChange, context }) {
     const [templatePreset, setTemplatePreset] = useState("custom");
@@ -26,6 +33,10 @@ function TemplateParams({ params, onChange, context }) {
         return vars;
     };
     const availableVars = getAvailableVariables();
+
+    const localFieldOptions = availableVars
+        .filter(v => v.type === 'local')
+        .map(v => ({ value: v.name, label: v.name }));
 
     useEffect(() => {
         if (templatePreset !== 'custom' && templateSourceField) {
@@ -61,29 +72,22 @@ function TemplateParams({ params, onChange, context }) {
 
             <div className="bg-[#0d1117] p-2 rounded border border-[#30363d] mb-2">
                 <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Generator Type</label>
-                <select
+                <CustomSelect
                     value={templatePreset}
-                    onChange={e => setTemplatePreset(e.target.value)}
-                    className={`w-full p-2 rounded border ${colors.border} bg-[#161b22] text-white text-sm`}
-                >
-                    <option value="custom">Custom (Write Code)</option>
-                    <option value="email">📧 Email from Name</option>
-                    <option value="username">👤 Username from Name</option>
-                </select>
+                    onChange={setTemplatePreset}
+                    options={PRESET_OPTIONS}
+                />
 
                 {templatePreset !== 'custom' && (
                     <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1">
                         <label className="text-[10px] text-gray-500 font-bold block mb-1">Source Field</label>
-                        <select
+                        <CustomSelect
                             value={templateSourceField}
-                            onChange={e => setTemplateSourceField(e.target.value)}
-                            className={`w-full p-1.5 rounded border ${colors.border} bg-[#0d1117] text-white text-xs`}
-                        >
-                            <option value="">-- Select --</option>
-                            {availableVars.filter(v => v.type === 'local').map(v => (
-                                <option key={v.name} value={v.name}>{v.name}</option>
-                            ))}
-                        </select>
+                            onChange={setTemplateSourceField}
+                            options={localFieldOptions}
+                            placeholder="-- Select Field --"
+                        />
+
                         {templatePreset === 'email' && (
                             <div>
                                 <label className="text-[10px] text-gray-500 font-bold block mb-1">Domain</label>

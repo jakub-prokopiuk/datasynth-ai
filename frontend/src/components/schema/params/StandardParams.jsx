@@ -1,23 +1,32 @@
-import { Hash, ToggleLeft, FileCode, Calendar, Link2, PieChart, Plus, Trash2, Percent, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Hash, ToggleLeft, FileCode, Calendar, Link2, PieChart, Plus, Trash2, Percent, AlertTriangle, CheckCircle2, XCircle, Type } from 'lucide-react';
 import { colors } from '../../../theme';
+import CustomSelect from '../../ui/CustomSelect';
+
+const FAKER_OPTIONS = [
+    { value: "uuid4", label: "UUID" },
+    { value: "name", label: "Full Name" },
+    { value: "email", label: "Email Address" },
+    { value: "job", label: "Job Title" },
+    { value: "address", label: "Address (Full)" },
+    { value: "city", label: "City" },
+    { value: "country", label: "Country" },
+    { value: "ean", label: "EAN Code" },
+    { value: "phone_number", label: "Phone Number" },
+    { value: "company", label: "Company Name" },
+    { value: "ipv4", label: "IP Address (v4)" },
+    { value: "url", label: "URL / Website" },
+    { value: "text", label: "Random Text (Sentence)" }
+];
 
 export function FakerParams({ params, onChange }) {
     return (
         <div>
             <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Faker Method</label>
-            <select
+            <CustomSelect
                 value={params.method || "uuid4"}
-                onChange={e => onChange({ method: e.target.value })}
-                className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`}
-            >
-                <option value="uuid4">UUID</option>
-                <option value="name">Name</option>
-                <option value="email">Email</option>
-                <option value="job">Job Title</option>
-                <option value="address">Address</option>
-                <option value="ean">EAN Code</option>
-                <option value="phone_number">Phone</option>
-            </select>
+                onChange={val => onChange({ method: val })}
+                options={FAKER_OPTIONS}
+            />
         </div>
     );
 }
@@ -183,12 +192,6 @@ export function DistributionParams({ params, onChange }) {
                 <div className={`text-[10px] flex items-center gap-1.5 ${isZero ? 'text-red-400' : (isExact ? 'text-green-500' : 'text-orange-400')}`}>
                     {isZero ? <XCircle size={12} /> : (isExact ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />)}
                     <span className="font-bold">Total: {totalWeight}</span>
-                    {!isExact && !isZero && (
-                        <span className="opacity-70 text-[9px] font-normal">(Will act as relative ratio)</span>
-                    )}
-                    {isZero && (
-                        <span className="opacity-70 text-[9px] font-normal">(Must be {'>'} 0)</span>
-                    )}
                 </div>
                 <button
                     onClick={handleAdd}
@@ -206,11 +209,37 @@ export function ForeignKeyParams({ params, onChange, context }) {
     const targetTableObj = tables.find(t => t.id === params.table_id);
     const targetColumns = targetTableObj ? targetTableObj.fields : [];
 
+    const tableOptions = tables
+        .filter(t => t.id !== activeTableId)
+        .map(t => ({ value: t.id, label: `${t.name} (${t.rows_count} rows)` }));
+
+    const columnOptions = targetColumns.map(col => ({
+        value: col.name,
+        label: `${col.name} (${col.type})`
+    }));
+
     return (
         <div className="space-y-3">
             <div className="flex items-start gap-2 p-2 rounded bg-blue-900/20 border border-blue-700/50 text-blue-300 text-[10px] mb-2"><Link2 size={12} className="mt-0.5 shrink-0" /><div><span className="font-bold">Relation:</span> Select a source table.</div></div>
-            <div><label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Source Table</label><select value={params.table_id || ""} onChange={e => onChange({ table_id: e.target.value, column_name: "" })} className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`}><option value="">-- Select Table --</option>{tables.filter(t => t.id !== activeTableId).map(t => (<option key={t.id} value={t.id}>{t.name} ({t.rows_count} rows)</option>))}</select></div>
-            <div><label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Source Column</label><select value={params.column_name || ""} onChange={e => onChange({ column_name: e.target.value })} disabled={!params.table_id} className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm disabled:opacity-50`}><option value="">-- Select Column --</option>{targetColumns.map(col => (<option key={col.name} value={col.name}>{col.name} ({col.type})</option>))}</select></div>
+            <div>
+                <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Source Table</label>
+                <CustomSelect
+                    value={params.table_id || ""}
+                    onChange={val => onChange({ table_id: val, column_name: "" })}
+                    options={tableOptions}
+                    placeholder="-- Select Table --"
+                />
+            </div>
+            <div>
+                <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Source Column</label>
+                <CustomSelect
+                    value={params.column_name || ""}
+                    onChange={val => onChange({ column_name: val })}
+                    options={columnOptions}
+                    disabled={!params.table_id}
+                    placeholder="-- Select Column --"
+                />
+            </div>
         </div>
     );
 }
