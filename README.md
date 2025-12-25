@@ -7,6 +7,27 @@ It solves the problem of creating realistic test data that requires context-awar
 
 ## Installation & Setup
 
+### Running with Docker
+1. Clone the Repository
+```bash
+git clone https://github.com/jakub-prokopiuk/datasynth-ai.git
+cd datasynth-ai
+```
+
+### 2. Environment Variables
+Create a `.env` file in the `backend` directory and add your OpenAI API key:
+```bash
+touch ./backend/.env
+echo "OPENAI_API_KEY=your-api-key-here" > ./backend/.env
+```
+
+### 3. Build and Run with Docker Compose
+```bash
+docker compose up --build
+```
+
+### Running without Docker
+
 ### Prerequisites
 -   Node.js (v16+)
 -   Python (v3.9+)
@@ -14,7 +35,7 @@ It solves the problem of creating realistic test data that requires context-awar
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/jakub-prokopiuk/datasynth-ai.git](https://github.com/jakub-prokopiuk/datasynth-ai.git)
+git clone https://github.com/jakub-prokopiuk/datasynth-ai.git
 cd datasynth-ai
 ```
 
@@ -40,8 +61,9 @@ python main.py
 ```
 
 ### 5. Frontend Setup
+Open another terminal window and navigate to the `frontend` directory:
 ```bash
-cd ../frontend
+cd /frontend
 npm install
 npm run dev
 # The application should now be accessible at http://localhost:5173
