@@ -1,4 +1,4 @@
-import { Hash, ToggleLeft, FileCode, Calendar, Link2 } from 'lucide-react';
+import { Hash, ToggleLeft, FileCode, Calendar, Link2, PieChart, Plus, Trash2, Percent, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { colors } from '../../../theme';
 
 export function FakerParams({ params, onChange }) {
@@ -102,16 +102,101 @@ export function TimestampParams({ params, onChange }) {
 }
 
 export function DistributionParams({ params, onChange }) {
-    const optionsStr = params.options ? params.options.join(", ") : "BUG, FEATURE, DOCS";
-    const weightsStr = params.weights ? params.weights.join(", ") : "50, 30, 20";
+    const options = params.options || ["Option A", "Option B"];
+    const weights = params.weights || [50, 50];
 
-    const handleOptions = (val) => onChange({ options: val.split(",").map(s => s.trim()) });
-    const handleWeights = (val) => onChange({ weights: val.split(",").map(s => parseFloat(s.trim())) });
+    const totalWeight = weights.reduce((a, b) => a + (parseFloat(b) || 0), 0);
+    const isExact = Math.abs(totalWeight - 100) < 0.1;
+    const isZero = totalWeight === 0;
+
+    const handleUpdateOption = (index, value) => {
+        const newOptions = [...options];
+        newOptions[index] = value;
+        onChange({ options: newOptions, weights: weights });
+    };
+
+    const handleUpdateWeight = (index, value) => {
+        const newWeights = [...weights];
+        newWeights[index] = parseFloat(value) || 0;
+        onChange({ options: options, weights: newWeights });
+    };
+
+    const handleAdd = () => {
+        onChange({
+            options: [...options, `Option ${options.length + 1}`],
+            weights: [...weights, 10]
+        });
+    };
+
+    const handleRemove = (index) => {
+        if (options.length <= 1) return;
+        const newOptions = options.filter((_, i) => i !== index);
+        const newWeights = weights.filter((_, i) => i !== index);
+        onChange({ options: newOptions, weights: newWeights });
+    };
 
     return (
         <div className="space-y-3">
-            <div><label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Options (comma sep)</label><input type="text" value={optionsStr} onChange={e => handleOptions(e.target.value)} className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`} /></div>
-            <div><label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Weights (comma sep)</label><input type="text" value={weightsStr} onChange={e => handleWeights(e.target.value)} className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`} /></div>
+            <div className="flex items-start gap-2 p-2 rounded bg-orange-900/20 border border-orange-700/50 text-orange-300 text-[10px] mb-2">
+                <PieChart size={12} className="mt-0.5 shrink-0" />
+                <div><span className="font-bold">Weighted Random:</span> Define options and their relative probability weights.</div>
+            </div>
+
+            <div className="space-y-2">
+                <div className="flex justify-between text-[10px] text-gray-500 font-bold px-1">
+                    <span>Option Label</span>
+                    <span>Weight</span>
+                </div>
+
+                {options.map((opt, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                        <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => handleUpdateOption(i, e.target.value)}
+                            className={`flex-1 p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`}
+                            placeholder="Value"
+                        />
+                        <div className="relative w-20">
+                            <input
+                                type="number"
+                                value={weights[i]}
+                                onChange={(e) => handleUpdateWeight(i, e.target.value)}
+                                className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm text-right pr-6`}
+                            />
+                            <div className="absolute right-2 top-2.5 text-gray-500 pointer-events-none">
+                                <Percent size={10} />
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => handleRemove(i)}
+                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition"
+                            disabled={options.length <= 1}
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-[#30363d] mt-2">
+                <div className={`text-[10px] flex items-center gap-1.5 ${isZero ? 'text-red-400' : (isExact ? 'text-green-500' : 'text-orange-400')}`}>
+                    {isZero ? <XCircle size={12} /> : (isExact ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />)}
+                    <span className="font-bold">Total: {totalWeight}</span>
+                    {!isExact && !isZero && (
+                        <span className="opacity-70 text-[9px] font-normal">(Will act as relative ratio)</span>
+                    )}
+                    {isZero && (
+                        <span className="opacity-70 text-[9px] font-normal">(Must be {'>'} 0)</span>
+                    )}
+                </div>
+                <button
+                    onClick={handleAdd}
+                    className="text-[10px] flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-1 rounded border border-gray-700 transition"
+                >
+                    <Plus size={10} /> Add Option
+                </button>
+            </div>
         </div>
     );
 }

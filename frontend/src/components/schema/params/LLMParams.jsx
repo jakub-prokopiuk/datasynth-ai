@@ -71,7 +71,17 @@ function LLMParams({ params, onChange, context }) {
                     <label className={`flex items-center gap-1 text-xs font-bold ${colors.textMuted}`}><Thermometer size={12} /> Temperature</label>
                     <span className="text-xs font-mono text-blue-400">{params.temperature ?? 1.0}</span>
                 </div>
-                <input type="range" min="0" max="2" step="0.1" value={params.temperature ?? 1.0} onChange={(e) => onChange({ temperature: parseFloat(e.target.value) })} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                <input
+                    type="range" min="0" max="2" step="0.1"
+                    value={params.temperature ?? 1.0}
+                    onChange={(e) => onChange({ temperature: parseFloat(e.target.value) })}
+                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                    <span>Precise (0.0)</span>
+                    <span>Creative (1.0)</span>
+                    <span>Chaotic (2.0)</span>
+                </div>
             </div>
 
             {params.temperature < 0.5 && (
@@ -85,8 +95,29 @@ function LLMParams({ params, onChange, context }) {
                 <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-white transition mt-2"><Sliders size={10} /> {showAdvanced ? "Hide" : "Show"} Advanced Parameters</button>
                 {showAdvanced && (
                     <div className="mt-3 space-y-3 p-3 bg-black/20 rounded border border-[#30363d]">
-                        <div><label className={`text-[10px] font-bold ${colors.textMuted}`}>Top P: {params.top_p ?? 1.0}</label><input type="range" min="0" max="1" step="0.05" value={params.top_p ?? 1.0} onChange={(e) => onChange({ top_p: parseFloat(e.target.value) })} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-500" /></div>
-                        <div><label className={`text-[10px] font-bold ${colors.textMuted}`}>Freq. Penalty: {params.frequency_penalty ?? 0.0}</label><input type="range" min="0" max="2" step="0.1" value={params.frequency_penalty ?? 0.0} onChange={(e) => onChange({ frequency_penalty: parseFloat(e.target.value) })} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-500" /></div>
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className={`text-[10px] font-bold ${colors.textMuted}`}>Top P</label>
+                                <span className="text-[10px] font-mono text-gray-400">{params.top_p ?? 1.0}</span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05" value={params.top_p ?? 1.0} onChange={(e) => onChange({ top_p: parseFloat(e.target.value) })} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-500" />
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className={`text-[10px] font-bold ${colors.textMuted}`}>Freq. Penalty</label>
+                                <span className="text-[10px] font-mono text-gray-400">{params.frequency_penalty ?? 0.0}</span>
+                            </div>
+                            <input type="range" min="0" max="2" step="0.1" value={params.frequency_penalty ?? 0.0} onChange={(e) => onChange({ frequency_penalty: parseFloat(e.target.value) })} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-500" />
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className={`text-[10px] font-bold ${colors.textMuted}`}>Pres. Penalty</label>
+                                <span className="text-[10px] font-mono text-gray-400">{params.presence_penalty ?? 0.0}</span>
+                            </div>
+                            <input type="range" min="0" max="2" step="0.1" value={params.presence_penalty ?? 0.0} onChange={(e) => onChange({ presence_penalty: parseFloat(e.target.value) })} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-500" />
+                        </div>
                     </div>
                 )}
             </div>
