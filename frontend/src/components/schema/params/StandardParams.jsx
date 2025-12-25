@@ -3,19 +3,25 @@ import { colors } from '../../../theme';
 import CustomSelect from '../../ui/CustomSelect';
 
 const FAKER_OPTIONS = [
-    { value: "uuid4", label: "UUID" },
+    { value: "uuid4", label: "UUID (Unique ID)" },
     { value: "name", label: "Full Name" },
+    { value: "first_name", label: "First Name" },
+    { value: "last_name", label: "Last Name" },
+    { value: "user_name", label: "Username / Login" },
     { value: "email", label: "Email Address" },
+    { value: "phone_number", label: "Phone Number" },
     { value: "job", label: "Job Title" },
     { value: "address", label: "Address (Full)" },
+    { value: "street_address", label: "Street Address" },
     { value: "city", label: "City" },
+    { value: "postcode", label: "Postal / Zip Code" },
     { value: "country", label: "Country" },
-    { value: "ean", label: "EAN Code" },
-    { value: "phone_number", label: "Phone Number" },
-    { value: "company", label: "Company Name" },
+    { value: "state", label: "State / Province" },
     { value: "ipv4", label: "IP Address (v4)" },
+    { value: "mac_address", label: "MAC Address" },
     { value: "url", label: "URL / Website" },
-    { value: "text", label: "Random Text (Sentence)" }
+    { value: "file_name", label: "File Name" },
+    { value: "file_extension", label: "File Extension" },
 ];
 
 export function FakerParams({ params, onChange }) {
