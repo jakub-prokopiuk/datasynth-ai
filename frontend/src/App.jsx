@@ -13,18 +13,21 @@ import HelpModal from './components/modals/HelpModal';
 import TemplateModal from './components/modals/TemplateModal';
 import ProjectModal from './components/modals/ProjectModal';
 import SaveModal from './components/modals/SaveModal';
+import GenerationModal from './components/modals/GenerationModal';
 
 function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
   const [generatedData, setGeneratedData] = useState(null);
+  const [currentJobId, setCurrentJobId] = useState(null);
 
   const [modals, setModals] = useState({
     help: false,
     template: false,
     project: false,
-    save: false
+    save: false,
+    generation: false
   });
 
   const [config, setConfig] = useState({
@@ -66,13 +69,10 @@ function App() {
     }
   }, [notification]);
 
-
   const handleLoadTemplate = (template) => {
     setConfig({ ...config, ...template.config });
     setTables(template.tables);
-    if (template.tables.length > 0) {
-      setActiveTableId(template.tables[0].id);
-    }
+    if (template.tables.length > 0) setActiveTableId(template.tables[0].id);
     setGeneratedData(null);
     setError(null);
     toggleModal('template', false);
@@ -80,28 +80,15 @@ function App() {
   };
 
   const executeSaveToCloud = async (saveName) => {
-    if (!saveName.trim()) {
-      showToast('error', "Project name cannot be empty.");
-      return;
-    }
-
-    const payload = {
-      name: saveName,
-      description: config.global_context,
-      schema_data: {
-        config: { ...config, job_name: saveName },
-        tables: tables
-      }
-    };
-
+    if (!saveName.trim()) { showToast('error', "Project name cannot be empty."); return; }
+    const payload = { name: saveName, description: config.global_context, schema_data: { config: { ...config, job_name: saveName }, tables: tables } };
     try {
       await axios.post('http://localhost:8000/projects', payload);
       setConfig(prev => ({ ...prev, job_name: saveName }));
       toggleModal('save', false);
       showToast('success', "Project saved to database successfully!");
     } catch (e) {
-      console.error(e);
-      showToast('error', "Error saving project: " + (e.response?.data?.detail || e.message));
+      showToast('error', "Error saving: " + (e.response?.data?.detail || e.message));
     }
   };
 
@@ -110,26 +97,18 @@ function App() {
       setLoading(true);
       const res = await axios.get(`http://localhost:8000/projects/${projectId}`);
       const data = res.data;
-
       if (data.config && Array.isArray(data.tables)) {
         setConfig(data.config);
         setTables(data.tables);
-        if (data.tables.length > 0) {
-          setActiveTableId(data.tables[0].id);
-        }
+        if (data.tables.length > 0) setActiveTableId(data.tables[0].id);
         setError(null);
         setGeneratedData(null);
         toggleModal('project', false);
         showToast('success', "Project loaded successfully!");
-      } else {
-        showToast('error', "Invalid project data format.");
-      }
+      } else { showToast('error', "Invalid project data format."); }
     } catch (e) {
-      console.error(e);
-      showToast('error', "Error loading project: " + (e.response?.data?.detail || e.message));
-    } finally {
-      setLoading(false);
-    }
+      showToast('error', "Error loading: " + (e.response?.data?.detail || e.message));
+    } finally { setLoading(false); }
   };
 
   const handleExportConfig = () => {
@@ -141,7 +120,6 @@ function App() {
     a.download = `${config.job_name.replace(/\s+/g, '_').toLowerCase()}_schema.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('success', "Configuration exported to file.");
   };
 
   const handleImportConfig = (file) => {
@@ -153,20 +131,14 @@ function App() {
           setConfig(importedData.config);
           setTables(importedData.tables);
           setActiveTableId(importedData.tables[0].id);
-          setError(null);
-          showToast('success', "Configuration imported successfully.");
-        } else {
-          showToast('error', "Invalid v2 schema format. Missing 'tables'.");
-        }
-      } catch (err) {
-        showToast('error', "Failed to parse JSON file: " + err.message);
-      }
+          showToast('success', "Imported successfully.");
+        } else { showToast('error', "Invalid format."); }
+      } catch (err) { showToast('error', "Parse error: " + err.message); }
     };
     reader.readAsText(file);
   };
 
   const handleGenerate = async () => {
-    setLoading(true);
     setError(null);
     setGeneratedData(null);
 
@@ -181,12 +153,26 @@ function App() {
     };
 
     try {
+      const response = await axios.post('http://127.0.0.1:8000/generate/async', payload);
+      const jobId = response.data.job_id;
+
+      setCurrentJobId(jobId);
+      toggleModal('generation', true);
+
+    } catch (err) {
+      showToast('error', "Failed to start generation: " + err.message);
+    }
+  };
+
+  const handleJobComplete = async (jobId) => {
+    try {
       if (config.output_format === 'json') {
-        const response = await axios.post('http://127.0.0.1:8000/generate', payload);
+        const response = await axios.get(`http://127.0.0.1:8000/jobs/${jobId}/result`);
         setGeneratedData(response.data);
-        showToast('success', "Data generated successfully!");
+        toggleModal('generation', false);
+        showToast('success', "Data generated!");
       } else {
-        const response = await axios.post('http://127.0.0.1:8000/generate', payload, {
+        const response = await axios.get(`http://127.0.0.1:8000/jobs/${jobId}/result`, {
           responseType: 'blob'
         });
         const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -197,25 +183,12 @@ function App() {
         document.body.appendChild(link);
         link.click();
         link.remove();
-        setLoading(false);
-        showToast('success', "File generated and downloaded!");
+
+        toggleModal('generation', false);
+        showToast('success', "File downloaded!");
       }
     } catch (err) {
-      let errorMessage = "Unknown error generating file";
-      if (err.response && err.response.data instanceof Blob) {
-        const text = await err.response.data.text();
-        try {
-          const jsonError = JSON.parse(text);
-          errorMessage = jsonError.detail || errorMessage;
-        } catch (e) {
-        }
-      } else if (err.message) {
-        errorMessage = err.message + (err.response ? ": " + JSON.stringify(err.response.data) : "");
-      }
-      setError(errorMessage);
-      showToast('error', "Generation failed. Check output console.");
-    } finally {
-      setLoading(false);
+      showToast('error', "Failed to retrieve results.");
     }
   };
 
@@ -245,6 +218,14 @@ function App() {
       {modals.template && <TemplateModal onClose={() => toggleModal('template', false)} onSelect={handleLoadTemplate} />}
       {modals.project && <ProjectModal onClose={() => toggleModal('project', false)} onLoad={handleLoadFromCloud} />}
 
+      {modals.generation && (
+        <GenerationModal
+          jobId={currentJobId}
+          onClose={() => toggleModal('generation', false)}
+          onComplete={handleJobComplete}
+        />
+      )}
+
       <div className={`w-full md:w-5/12 lg:w-4/12 ${colors.bgPanel} border-r ${colors.border} p-6 overflow-y-auto h-screen z-10 flex flex-col`}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -256,11 +237,7 @@ function App() {
               <p className={`text-xs ${colors.textMuted}`}>Relational Data Generator</p>
             </div>
           </div>
-          <button
-            onClick={() => toggleModal('help', true)}
-            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition"
-            title="Open Tutorial & Guide"
-          >
+          <button onClick={() => toggleModal('help', true)} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition">
             <HelpCircle size={20} />
           </button>
         </div>
@@ -325,7 +302,6 @@ function App() {
         onDownload={downloadFile}
         setError={setError}
       />
-
     </div>
   );
 }

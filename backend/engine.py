@@ -6,6 +6,8 @@ import random
 import rstr
 from jinja2 import Environment, BaseLoader
 from unidecode import unidecode
+from job_manager import job_manager
+import asyncio
 
 class DotAccessWrapper:
     def __init__(self, data: Dict[str, Any]):
@@ -155,7 +157,7 @@ class DataEngine:
                 dependencies[t_id] = dependencies[t_id] - set(ready_tables)
         return ordered_tables
 
-    def generate(self, request: GeneratorRequest) -> Dict[str, List[Dict[str, Any]]]:
+    async def generate(self, request: GeneratorRequest, job_id: str = None) -> Dict[str, List[Dict[str, Any]]]:
         generated_tables_data: Dict[str, List[Dict[str, Any]]] = {}
         table_id_to_name = {t.id: t.name for t in request.tables}
         ordered_tables = self._resolve_generation_order(request.tables)
@@ -164,64 +166,92 @@ class DataEngine:
         try: job_faker = Faker(requested_locale)
         except Exception: job_faker = Faker("en_US")
 
+        total_rows_to_gen = sum(t.rows_count for t in request.tables)
+        current_rows_gen = 0
+        
+        if job_id:
+            job_manager.set_total(job_id, total_rows_to_gen)
+            job_manager.update_progress(job_id, 0) 
+
         for table in ordered_tables:
             table_rows = []
             unique_tracker: Dict[str, set] = {}
             for field in table.fields:
                 if field.is_unique: unique_tracker[field.name] = set()
 
-            for _ in range(table.rows_count):
-                row_data = {}         
-                context_data = {}     
-                if request.config.global_context: context_data["global_context"] = request.config.global_context
+            rows_generated_for_table = 0
+            
+            BATCH_SIZE = 20
 
-                for field in table.fields:
-                    max_retries = 10 
-                    attempts = 0
-                    final_value = None
-                    current_avoid_list = set()
-                    if field.is_unique: current_avoid_list.update(unique_tracker[field.name])
+            while rows_generated_for_table < table.rows_count:
+                if job_id:
+                    await job_manager.check_cancellation(job_id)
                     
-                    while attempts < max_retries:
-                        generated_val = None
+                    await asyncio.sleep(0.02) 
+
+                remaining = table.rows_count - rows_generated_for_table
+                current_batch = min(BATCH_SIZE, remaining)
+
+                for _ in range(current_batch):
+                    row_data = {}         
+                    context_data = {}     
+                    if request.config.global_context: context_data["global_context"] = request.config.global_context
+
+                    for field in table.fields:
+                        max_retries = 10 
+                        attempts = 0
+                        final_value = None
+                        current_avoid_list = set()
+                        if field.is_unique: current_avoid_list.update(unique_tracker[field.name])
                         
-                        if field.type == "faker": generated_val = self._generate_faker_value(field.params, job_faker)
-                        elif field.type == "timestamp": generated_val = self._generate_timestamp_value(field.params, job_faker)
-                        elif field.type == "foreign_key":
-                            result = self._generate_foreign_key_value(field.params, generated_tables_data, current_avoid_list)
-                            if result and not isinstance(result, str):
-                                val, parent_row = result
-                                generated_val = val
-                                context_data[field.name] = parent_row 
-                            else: generated_val = result if result else "Error: FK Failed"
-                        elif field.type == "distribution": generated_val = self._generate_distribution_value(field.params)
-                        elif field.type == "integer": generated_val = self._generate_integer_value(field.params)
-                        elif field.type == "boolean": generated_val = self._generate_boolean_value(field.params)
-                        elif field.type == "regex": generated_val = self._generate_regex_value(field.params)
-                        elif field.type == "llm": generated_val = self._generate_llm_value(field.params, context_data, current_avoid_list, attempts)
-                        elif field.type == "template": generated_val = self._generate_template_value(field.params, context_data)
-                        
-                        if field.is_unique:
-                            if generated_val not in unique_tracker[field.name] and "Error" not in str(generated_val):
-                                unique_tracker[field.name].add(generated_val)
-                                final_value = generated_val
-                                break
-                            else:
-                                attempts += 1
-                                if field.type == "foreign_key" and "Error" in str(generated_val):
+                        while attempts < max_retries:
+                            generated_val = None
+                            
+                            if field.type == "faker": generated_val = self._generate_faker_value(field.params, job_faker)
+                            elif field.type == "timestamp": generated_val = self._generate_timestamp_value(field.params, job_faker)
+                            elif field.type == "foreign_key":
+                                result = self._generate_foreign_key_value(field.params, generated_tables_data, current_avoid_list)
+                                if result and not isinstance(result, str):
+                                    val, parent_row = result
+                                    generated_val = val
+                                    context_data[field.name] = parent_row 
+                                else: generated_val = result if result else "Error: FK Failed"
+                            elif field.type == "distribution": generated_val = self._generate_distribution_value(field.params)
+                            elif field.type == "integer": generated_val = self._generate_integer_value(field.params)
+                            elif field.type == "boolean": generated_val = self._generate_boolean_value(field.params)
+                            elif field.type == "regex": generated_val = self._generate_regex_value(field.params)
+                            elif field.type == "llm": generated_val = self._generate_llm_value(field.params, context_data, current_avoid_list, attempts)
+                            elif field.type == "template": generated_val = self._generate_template_value(field.params, context_data)
+                            
+                            if field.is_unique:
+                                if generated_val not in unique_tracker[field.name] and "Error" not in str(generated_val):
+                                    unique_tracker[field.name].add(generated_val)
                                     final_value = generated_val
                                     break
-                                current_avoid_list.add(generated_val)
-                        else:
-                            final_value = generated_val
-                            break
+                                else:
+                                    attempts += 1
+                                    if field.type == "foreign_key" and "Error" in str(generated_val):
+                                        final_value = generated_val
+                                        break
+                                    current_avoid_list.add(generated_val)
+                            else:
+                                final_value = generated_val
+                                break
 
-                    if field.is_unique and attempts == max_retries: final_value = f"Error: Uniqueness failed for {field.name}"
-                    
-                    row_data[field.name] = final_value
-                    if field.type != "foreign_key": context_data[field.name] = final_value
+                        if field.is_unique and attempts == max_retries: final_value = f"Error: Uniqueness failed for {field.name}"
+                        
+                        row_data[field.name] = final_value
+                        if field.type != "foreign_key": context_data[field.name] = final_value
 
-                table_rows.append(row_data)
+                    table_rows.append(row_data)
+                
+                rows_generated_for_table += current_batch
+                current_rows_gen += current_batch
+
+                if job_id and total_rows_to_gen > 0:
+                    percent = int((current_rows_gen / total_rows_to_gen) * 100)
+                    job_manager.update_progress(job_id, percent)
+
             generated_tables_data[table.id] = table_rows
 
         final_output = {}
