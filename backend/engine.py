@@ -1,5 +1,5 @@
 from faker import Faker
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Union
 from models import GeneratorRequest
 from openai import OpenAI
 import random
