@@ -14,7 +14,7 @@ class FieldSchema(BaseModel):
 class TableSchema(BaseModel):
     id: str = Field(..., description="Unique internal ID of the table")
     name: str = Field(..., description="Name of the table")
-    rows_count: int = Field(10, ge=1, le=1000)
+    rows_count: int = Field(10, ge=1, le=100000, description="Number of rows to generate")
     fields: List[FieldSchema]
 
 class GeneratorConfig(BaseModel):
@@ -26,6 +26,7 @@ class GeneratorConfig(BaseModel):
 class GeneratorRequest(BaseModel):
     config: GeneratorConfig
     tables: List[TableSchema]
+
 
 class ProjectCreate(BaseModel):
     name: str

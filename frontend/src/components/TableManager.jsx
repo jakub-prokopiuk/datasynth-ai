@@ -1,72 +1,83 @@
-import { Table2, Plus, Trash2, Layers } from 'lucide-react';
+import { Table, Plus, Trash2, Layers, Hash } from 'lucide-react';
 import { colors } from '../theme';
 
 function TableManager({ tables, activeTableId, onAddTable, onRemoveTable, onSelectTable, onUpdateTable }) {
+
     return (
-        <div className="mb-6">
-            <div className="flex items-center justify-between mb-3 px-1">
+        <section className="mb-8 space-y-4 border-b border-[#30363d] pb-6">
+            <div className="flex items-center justify-between">
                 <h2 className={`text-xs font-bold ${colors.textMuted} uppercase tracking-wider flex items-center gap-2`}>
-                    <Layers size={14} /> Database Tables
+                    <Layers size={14} /> Database Tables ({tables.length})
                 </h2>
                 <button
                     onClick={onAddTable}
-                    className="text-[10px] flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
+                    className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded flex items-center gap-1 transition shadow-lg shadow-blue-900/20"
                 >
                     <Plus size={12} /> Add Table
                 </button>
             </div>
 
-            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+            <div className="space-y-2">
                 {tables.map((table) => (
                     <div
                         key={table.id}
                         onClick={() => onSelectTable(table.id)}
-                        className={`group p-3 rounded-md border cursor-pointer transition relative ${table.id === activeTableId
-                            ? 'bg-blue-900/20 border-blue-500 ring-1 ring-blue-500/50'
-                            : `bg-[#0d1117] ${colors.border} hover:border-gray-500`
+                        className={`group p-3 rounded-md border transition-all cursor-pointer flex flex-col gap-3 relative
+                            ${table.id === activeTableId
+                                ? 'bg-[#1f242c] border-blue-500/50 shadow-md'
+                                : 'bg-[#0d1117] border-[#30363d] hover:border-gray-600'
                             }`}
                     >
-                        <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-2">
-                                <Table2 size={16} className={table.id === activeTableId ? "text-blue-400" : "text-gray-500"} />
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-1">
+                                <Table size={14} className={table.id === activeTableId ? "text-blue-400" : "text-gray-500"} />
                                 <input
                                     type="text"
                                     value={table.name}
                                     onChange={(e) => onUpdateTable(table.id, { name: e.target.value })}
-                                    className="bg-transparent text-sm font-bold text-white outline-none w-32 focus:border-b focus:border-blue-500"
-                                    onClick={(e) => e.stopPropagation()}
+                                    className={`bg-transparent border-none outline-none text-sm font-semibold w-full
+                                        ${table.id === activeTableId ? 'text-white' : 'text-gray-400'}`}
+                                    placeholder="Table Name"
                                 />
                             </div>
-                            {tables.length > 1 && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onRemoveTable(table.id);
-                                    }}
-                                    className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            )}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemoveTable(table.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded transition"
+                                title="Remove Table"
+                            >
+                                <Trash2 size={12} />
+                            </button>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <label className="text-[10px] text-gray-500 uppercase font-bold">Rows:</label>
+                        <div className="flex items-center gap-2 bg-[#010409] p-1.5 rounded border border-[#30363d]">
+                            <div className="flex items-center gap-1.5 px-1.5 border-r border-[#30363d]">
+                                <Hash size={12} className="text-gray-500" />
+                                <span className="text-[10px] text-gray-500 font-medium uppercase">Rows</span>
+                            </div>
+
                             <input
                                 type="number"
-                                value={table.rows_count}
-                                onChange={(e) => onUpdateTable(table.id, { rows_count: parseInt(e.target.value) || 0 })}
-                                onClick={(e) => e.stopPropagation()}
-                                className="bg-[#161b22] text-xs text-white border border-[#30363d] rounded px-1 py-0.5 w-16 text-right outline-none focus:border-blue-500"
+                                min="0"
+                                value={table.rows_count === 0 ? "" : table.rows_count}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    onUpdateTable(table.id, { rows_count: isNaN(val) ? 0 : val });
+                                }}
+                                className={`bg-transparent border-none outline-none text-xs font-mono w-full px-1 text-gray-300 placeholder-gray-700
+                                    [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+                                placeholder="0"
                             />
-                            <span className="text-[10px] text-gray-600 ml-auto">
-                                {table.fields.length} fields
-                            </span>
                         </div>
+                        {table.id === activeTableId && (
+                            <div className="absolute left-0 top-3 bottom-3 w-0.5 bg-blue-500 rounded-r-full"></div>
+                        )}
                     </div>
                 ))}
             </div>
-        </div>
+        </section>
     );
 }
 
