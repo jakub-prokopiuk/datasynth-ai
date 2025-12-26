@@ -62,11 +62,25 @@ class DataEngine:
             else: return dt.strftime(fmt)
         except Exception as e: return f"Error: Date gen failed {str(e)}"
 
-    def _generate_integer_value(self, params: Dict[str, Any]) -> int:
-        min_val = params.get("min", 0)
-        max_val = params.get("max", 100)
-        try: return random.randint(int(min_val), int(max_val))
-        except ValueError: return 0
+    def _generate_integer_or_float_value(self, params: Dict[str, Any]) -> Union[int, float]:
+            min_val = params.get("min", 0)
+            max_val = params.get("max", 100)
+            
+            is_float = isinstance(min_val, float) or isinstance(max_val, float)
+            
+            if is_float:
+                def get_precision(n):
+                    s = str(n)
+                    if '.' in s: return len(s.split('.')[1])
+                    return 0
+                
+                precision = max(get_precision(min_val), get_precision(max_val))
+                
+                val = random.uniform(float(min_val), float(max_val))
+                return round(val, precision)
+            else:
+                try: return random.randint(int(min_val), int(max_val))
+                except ValueError: return 0
 
     def _generate_boolean_value(self, params: Dict[str, Any]) -> bool:
         probability = params.get("probability", 50)
@@ -217,7 +231,7 @@ class DataEngine:
                                     context_data[field.name] = parent_row 
                                 else: generated_val = result if result else "Error: FK Failed"
                             elif field.type == "distribution": generated_val = self._generate_distribution_value(field.params)
-                            elif field.type == "integer": generated_val = self._generate_integer_value(field.params)
+                            elif field.type == "integer": generated_val = self._generate_integer_or_float_value(field.params)
                             elif field.type == "boolean": generated_val = self._generate_boolean_value(field.params)
                             elif field.type == "regex": generated_val = self._generate_regex_value(field.params)
                             elif field.type == "llm": generated_val = self._generate_llm_value(field.params, context_data, current_avoid_list, attempts)

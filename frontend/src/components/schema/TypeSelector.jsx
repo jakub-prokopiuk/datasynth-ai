@@ -20,7 +20,7 @@ const TYPE_OPTIONS = [
         group: "Standard Data",
         items: [
             { value: "faker", label: "Faker Library", icon: Type, desc: "Real-world data (names, address)", color: "text-blue-400" },
-            { value: "integer", label: "Number (Int)", icon: Hash, desc: "Range of integers", color: "text-indigo-400" },
+            { value: "integer", label: "Number", icon: Hash, desc: "Range of numbers", color: "text-indigo-400" },
             { value: "boolean", label: "Boolean", icon: ToggleLeft, desc: "True / False flag", color: "text-indigo-400" },
             { value: "timestamp", label: "Timestamp", icon: Calendar, desc: "Date & Time range", color: "text-cyan-400" },
             { value: "regex", label: "Regex Pattern", icon: FileCode, desc: "Match specific pattern", color: "text-pink-400" },

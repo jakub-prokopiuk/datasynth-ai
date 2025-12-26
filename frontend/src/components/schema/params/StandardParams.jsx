@@ -2,6 +2,10 @@ import { Hash, ToggleLeft, FileCode, Calendar, Link2, PieChart, Plus, Trash2, Pe
 import { colors } from '../../../theme';
 import CustomSelect from '../../ui/CustomSelect';
 
+const NO_SPINNER_CLASS = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
+const val = (v) => (v === undefined || v === null) ? "" : v;
+
 const FAKER_OPTIONS = [
     { value: "uuid4", label: "UUID (Unique ID)" },
     { value: "name", label: "Full Name" },
@@ -38,20 +42,38 @@ export function FakerParams({ params, onChange }) {
 }
 
 export function IntegerParams({ params, onChange }) {
+    const handleNum = (key, valueStr) => {
+        if (valueStr === "") return onChange({ [key]: "" });
+        const n = parseFloat(valueStr);
+        onChange({ [key]: isNaN(n) ? valueStr : n });
+    };
+
     return (
         <div className="space-y-3">
             <div className="flex items-start gap-2 p-2 rounded bg-indigo-900/20 border border-indigo-700/50 text-indigo-300 text-[10px] mb-2">
                 <Hash size={12} className="mt-0.5 shrink-0" />
-                <div><span className="font-bold">Number Range:</span> Generates random integers between Min and Max.</div>
+                <div><span className="font-bold">Number Range:</span> Generates random numbers between Min and Max (supports decimals).</div>
             </div>
             <div className="flex gap-4">
                 <div className="flex-1">
                     <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Min Value</label>
-                    <input type="number" value={params.min ?? 0} onChange={e => onChange({ min: parseInt(e.target.value) })} className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`} />
+                    <input
+                        type="number"
+                        step="any"
+                        value={val(params.min)}
+                        onChange={e => handleNum("min", e.target.value)}
+                        className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm outline-none focus:border-blue-500 ${NO_SPINNER_CLASS}`}
+                    />
                 </div>
                 <div className="flex-1">
                     <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Max Value</label>
-                    <input type="number" value={params.max ?? 100} onChange={e => onChange({ max: parseInt(e.target.value) })} className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm`} />
+                    <input
+                        type="number"
+                        step="any"
+                        value={val(params.max ?? 100)}
+                        onChange={e => handleNum("max", e.target.value)}
+                        className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm outline-none focus:border-blue-500 ${NO_SPINNER_CLASS}`}
+                    />
                 </div>
             </div>
         </div>
@@ -121,7 +143,7 @@ export function DistributionParams({ params, onChange }) {
     const weights = params.weights || [50, 50];
 
     const totalWeight = weights.reduce((a, b) => a + (parseFloat(b) || 0), 0);
-    const isExact = Math.abs(totalWeight - 100) < 0.1;
+    const isExact = Math.abs(totalWeight - 100) < 0.01;
     const isZero = totalWeight === 0;
 
     const handleUpdateOption = (index, value) => {
@@ -130,9 +152,14 @@ export function DistributionParams({ params, onChange }) {
         onChange({ options: newOptions, weights: weights });
     };
 
-    const handleUpdateWeight = (index, value) => {
+    const handleUpdateWeight = (index, valueStr) => {
         const newWeights = [...weights];
-        newWeights[index] = parseFloat(value) || 0;
+        if (valueStr === "") {
+            newWeights[index] = "";
+        } else {
+            const n = parseFloat(valueStr);
+            newWeights[index] = isNaN(n) ? valueStr : n;
+        }
         onChange({ options: options, weights: newWeights });
     };
 
@@ -175,9 +202,10 @@ export function DistributionParams({ params, onChange }) {
                         <div className="relative w-20">
                             <input
                                 type="number"
-                                value={weights[i]}
+                                step="any" // Obsługa float
+                                value={val(weights[i])}
                                 onChange={(e) => handleUpdateWeight(i, e.target.value)}
-                                className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm text-right pr-6`}
+                                className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm text-right pr-6 outline-none focus:border-blue-500 ${NO_SPINNER_CLASS}`}
                             />
                             <div className="absolute right-2 top-2.5 text-gray-500 pointer-events-none">
                                 <Percent size={10} />
@@ -197,7 +225,7 @@ export function DistributionParams({ params, onChange }) {
             <div className="flex justify-between items-center pt-2 border-t border-[#30363d] mt-2">
                 <div className={`text-[10px] flex items-center gap-1.5 ${isZero ? 'text-red-400' : (isExact ? 'text-green-500' : 'text-orange-400')}`}>
                     {isZero ? <XCircle size={12} /> : (isExact ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />)}
-                    <span className="font-bold">Total: {totalWeight}</span>
+                    <span className="font-bold">Total: {totalWeight.toFixed(2) /* Wyświetlamy max 2 miejsca po przecinku */}</span>
                 </div>
                 <button
                     onClick={handleAdd}
