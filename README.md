@@ -26,49 +26,6 @@ echo "OPENAI_API_KEY=your-api-key-here" > ./backend/.env
 docker compose up --build
 ```
 
-### Running without Docker
-
-### Prerequisites
--   Node.js (v16+)
--   Python (v3.9+)
--   OpenAI API Key
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/jakub-prokopiuk/datasynth-ai.git
-cd datasynth-ai
-```
-
-### 2. Backend Setup
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 3. Environment Variables
-Create a `.env` file in the `backend` directory and add your OpenAI API key:
-```bash
-touch .env
-echo "OPENAI_API_KEY=your-api-key-here" > .env
-```
-
-### 4. Run the Backend
-```bash
-python main.py
-# Server will start at [http://127.0.0.1:8000](http://127.0.0.1:8000)
-```
-
-### 5. Frontend Setup
-Open another terminal window and navigate to the `frontend` directory:
-```bash
-cd /frontend
-npm install
-npm run dev
-# The application should now be accessible at http://localhost:5173
-```
-
 ## Usage
 
 1. Defining tables
