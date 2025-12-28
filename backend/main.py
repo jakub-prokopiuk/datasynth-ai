@@ -1,16 +1,19 @@
-from fastapi import FastAPI, HTTPException, Response, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Response, Depends, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import List, Union, Any
+import uvicorn
+import asyncio
+import uuid
+from dotenv import load_dotenv
+
 from models import GeneratorRequest, ProjectCreate, ProjectSummary, PushToDbRequest
 from db_connector import DatabaseConnector
 from engine import DataEngine
 from exporters import DataExporter
-import uvicorn
-from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List, Union, Any
-import asyncio
 from database import init_db, get_db, ProjectDB
 from job_manager import job_manager
+from tasks import generate_dataset_task
 
 load_dotenv()
 
@@ -22,7 +25,7 @@ except Exception as e:
 app = FastAPI(
     title="LLM Data Generator API",
     description="Relational Data Generator API",
-    version="0.4.1"
+    version="0.5.0"
 )
 
 app.add_middleware(
@@ -77,8 +80,7 @@ def create_file_response(content: Union[str, bytes], config) -> Response:
     return content
 
 @app.post("/generate")
-async def generate_data(request: GeneratorRequest):
-    print(f"Received sync job: {request.config.job_name}")
+async def generate_data_sync(request: GeneratorRequest):
     try:
         raw_data = await data_engine.generate(request)
         formatted_output = format_generation_output(raw_data, request.config)
@@ -89,70 +91,60 @@ async def generate_data(request: GeneratorRequest):
             return create_file_response(formatted_output, request.config)
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-async def run_generation_task(job_id: str, request: GeneratorRequest):
-    try:
-        raw_data = await data_engine.generate(request, job_id)
-        
-        formatted_output = format_generation_output(raw_data, request.config)
-        
-        job_manager.complete_job(job_id, formatted_output)
-        
-    except asyncio.CancelledError:
-        print(f"Job {job_id} cancelled.")
-        job_manager.cancel_job(job_id)
-    except Exception as e:
-        print(f"Job {job_id} failed: {e}")
-        import traceback
-        traceback.print_exc()
-        job_manager.fail_job(job_id, str(e))
-
 @app.post("/generate/async")
-async def start_generation_job(request: GeneratorRequest, background_tasks: BackgroundTasks):
-    job_id = job_manager.create_job()
-    background_tasks.add_task(run_generation_task, job_id, request)
-    return {"job_id": job_id, "status": "started"}
-
-@app.delete("/jobs/{job_id}")
-async def cancel_job(job_id: str):
-    job_manager.cancel_job(job_id)
-    return {"status": "cancellation_requested"}
+async def start_generation_job(request: GeneratorRequest):
+    job_id = str(uuid.uuid4())
+    
+    job_manager.create_job(job_id, request.model_dump())
+    
+    generate_dataset_task.delay(job_id, request.model_dump_json())
+    
+    return {"job_id": job_id, "status": "queued"}
 
 @app.websocket("/ws/jobs/{job_id}")
 async def websocket_job_status(websocket: WebSocket, job_id: str):
     await websocket.accept()
     try:
+        last_progress = -1
         while True:
             job = job_manager.get_job(job_id)
             if not job:
                 await websocket.send_json({"status": "error", "message": "Job not found"})
                 break
             
-            response = {
-                "status": job["status"],
-                "progress": job["progress"],
-                "total": job["total"]
-            }
+            status = job.get("status")
+            progress = job.get("progress", 0)
             
-            if job["status"] in ["failed", "cancelled"]:
-                response["error"] = job.get("error")
+            if progress != last_progress or status in ["completed", "failed"]:
+                response = {
+                    "job_id": job_id,
+                    "status": status,
+                    "progress": progress,
+                    "total_rows": job.get("total_rows", 0)
+                }
+                
+                if status == "failed":
+                    response["error"] = job.get("error")
+                
                 await websocket.send_json(response)
+                last_progress = progress
+            
+            if status in ["completed", "failed"]:
                 await websocket.close()
                 break
-
-            if job["status"] == "completed":
-                await websocket.send_json(response)
-                await websocket.close()
-                break
-
-            await websocket.send_json(response)
-            await asyncio.sleep(0.05)
+                
+            await asyncio.sleep(0.5)
             
     except WebSocketDisconnect:
-        print(f"Client disconnected from job {job_id}")
+        pass
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 @app.get("/jobs/{job_id}/result")
 def get_job_result(job_id: str):
@@ -160,13 +152,25 @@ def get_job_result(job_id: str):
     if not job or job["status"] != "completed":
         raise HTTPException(status_code=400, detail="Job not ready or failed")
     
-    result = job["data"]
+    raw_data = job["data"]
+    config_dict = job.get("config", {})
     
-    if isinstance(result, (bytes, str)) and not isinstance(result, dict):
-        media_type = "application/zip" if isinstance(result, bytes) else "application/sql"
-        return Response(content=result, media_type=media_type)
+    if "config" in config_dict:
+        config_dict = config_dict["config"]
+    
+    class ConfigShim:
+        def __init__(self, d):
+            self.output_format = d.get("output_format", "json")
+            self.job_name = d.get("job_name", "dataset")
+
+    config = ConfigShim(config_dict)
+    
+    formatted_output = format_generation_output(raw_data, config)
+    
+    if config.output_format == "json":
+        return formatted_output
     else:
-        return result
+        return create_file_response(formatted_output, config)
 
 @app.post("/projects", response_model=ProjectSummary)
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
@@ -211,13 +215,8 @@ async def push_to_database(payload: PushToDbRequest):
     if not job or job["status"] != "completed":
         raise HTTPException(status_code=400, detail="Job not found or not completed")
     
-    
     raw_data = job["data"]
-    if isinstance(raw_data, dict) and "data" in raw_data:
-        raw_data = raw_data["data"]
-    elif not isinstance(raw_data, dict):
-        raise HTTPException(status_code=400, detail="Cannot push non-JSON job data (CSV/SQL)")
-
+    
     try:
         await asyncio.to_thread(DatabaseConnector.push_data, payload.connection_string, raw_data)
         return {"status": "success", "message": "Data pushed to database successfully"}

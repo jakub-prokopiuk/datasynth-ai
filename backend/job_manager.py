@@ -1,53 +1,75 @@
-import uuid
-import asyncio
-from typing import Dict, Any, Optional
+import json
+import redis
+import os
+from datetime import datetime
 
-class JobManager:
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+class RedisJobManager:
     def __init__(self):
-        self.jobs: Dict[str, Dict[str, Any]] = {}
+        self.redis = redis.from_url(REDIS_URL, decode_responses=True)
+        self.TTL = 3600 * 24
 
-    def create_job(self) -> str:
-        job_id = str(uuid.uuid4())
-        self.jobs[job_id] = {
+    def _get_key(self, job_id):
+        return f"job:{job_id}"
+
+    def create_job(self, job_id, config):
+        job_data = {
+            "id": job_id,
             "status": "pending",
             "progress": 0,
-            "total": 0,
-            "data": None,
-            "error": None,
-            "cancel_event": asyncio.Event()
+            "total_rows": 0,
+            "created_at": datetime.now().isoformat(),
+            "config": json.dumps(config),
+            "data": "",
+            "error": ""
         }
-        return job_id
+        
+        self.redis.hset(self._get_key(job_id), mapping=job_data)
+        self.redis.expire(self._get_key(job_id), self.TTL)
+        return job_data
 
-    def update_progress(self, job_id: str, progress: int):
-        if job_id in self.jobs:
-            self.jobs[job_id]["progress"] = progress
+    def get_job(self, job_id):
+        data = self.redis.hgetall(self._get_key(job_id))
+        if not data:
+            return None
+        
+        try:
+            if "config" in data and data["config"]: 
+                data["config"] = json.loads(data["config"])
+            
+            if "data" in data and data["data"]:
+                data["data"] = json.loads(data["data"])
+            else:
+                data["data"] = None
 
-    def set_total(self, job_id: str, total: int):
-         if job_id in self.jobs:
-            self.jobs[job_id]["total"] = total
+            if "progress" in data: data["progress"] = int(data["progress"])
+            if "total_rows" in data: data["total_rows"] = int(data["total_rows"])
+        except Exception as e:
+            print(f"Error decoding job data: {e}")
+            
+        return data
 
-    def complete_job(self, job_id: str, data: Any):
-        if job_id in self.jobs:
-            self.jobs[job_id]["status"] = "completed"
-            self.jobs[job_id]["progress"] = 100
-            self.jobs[job_id]["data"] = data
+    def update_progress(self, job_id, progress):
+        self.redis.hset(self._get_key(job_id), key="progress", value=progress)
 
-    def fail_job(self, job_id: str, error: str):
-        if job_id in self.jobs:
-            self.jobs[job_id]["status"] = "failed"
-            self.jobs[job_id]["error"] = error
+    def set_total(self, job_id, total):
+        self.redis.hset(self._get_key(job_id), key="total_rows", value=total)
 
-    def cancel_job(self, job_id: str):
-        if job_id in self.jobs:
-            self.jobs[job_id]["status"] = "cancelled"
-            self.jobs[job_id]["cancel_event"].set()
+    def complete_job(self, job_id, result_data):
+        self.redis.hset(self._get_key(job_id), mapping={
+            "status": "completed",
+            "progress": 100,
+            "data": json.dumps(result_data)
+        })
 
-    def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
-        return self.jobs.get(job_id)
+    def fail_job(self, job_id, error_msg):
+        self.redis.hset(self._get_key(job_id), mapping={
+            "status": "failed",
+            "error": str(error_msg)
+        })
+        
+    async def check_cancellation(self, job_id):
+        pass
 
-    async def check_cancellation(self, job_id: str):
-        job = self.jobs.get(job_id)
-        if job and job["cancel_event"].is_set():
-            raise asyncio.CancelledError("Job was cancelled by user")
-
-job_manager = JobManager()
+job_manager = RedisJobManager()

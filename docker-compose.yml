@@ -13,10 +13,37 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - ./backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/datasynth
+      - REDIS_URL=redis://redis:6379/0
+
+  redis:
+    image: redis:alpine
+    container_name: datasynth-redis
+    ports:
+      - "6379:6379"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    container_name: datasynth-worker
+    command: celery -A celery_worker.celery_app worker --loglevel=info --concurrency=1
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - db
+      - ollama
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/datasynth
+      - REDIS_URL=redis://redis:6379/0
 
   frontend:
     build:
@@ -69,6 +96,14 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    # Jeśli masz GPU NVIDIA, odkomentuj poniższe linie:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     restart: always
 
 volumes:
