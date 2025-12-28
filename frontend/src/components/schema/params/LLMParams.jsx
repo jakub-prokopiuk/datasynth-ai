@@ -1,11 +1,25 @@
 import { useState, useRef } from 'react';
-import { Thermometer, Sliders, AlertTriangle, Braces, Link2 } from 'lucide-react';
+import { Thermometer, Sliders, AlertTriangle, Braces, Link2, Server, Cpu } from 'lucide-react';
 import { colors } from '../../../theme';
+import CustomSelect from '../../ui/CustomSelect';
+
+const PROVIDER_OPTIONS = [
+    { value: "openai", label: "OpenAI (Cloud)" },
+    { value: "ollama", label: "Ollama (Local)" },
+];
+
+const OPENAI_MODELS = [
+    { value: "gpt-4o-mini", label: "GPT-4o Mini (Fast)" },
+    { value: "gpt-4o", label: "GPT-4o (Smart)" },
+    { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+];
 
 function LLMParams({ params, onChange, context }) {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const textAreaRef = useRef(null);
     const { existingFields, currentFieldName, tables } = context;
+
+    const provider = params.provider || "openai";
 
     const getAvailableVariables = () => {
         const vars = [];
@@ -40,7 +54,48 @@ function LLMParams({ params, onChange, context }) {
     };
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-4">
+
+            <div className="grid grid-cols-2 gap-3 pb-2 border-b border-[#30363d]">
+                <div>
+                    <label className={`block text-xs font-bold ${colors.textMuted} mb-1 flex items-center gap-1`}>
+                        <Server size={10} /> Provider
+                    </label>
+                    <CustomSelect
+                        value={provider}
+                        onChange={(val) => onChange({ provider: val, model: val === "ollama" ? "llama3" : "gpt-4o-mini" })}
+                        options={PROVIDER_OPTIONS}
+                    />
+                </div>
+                <div>
+                    <label className={`block text-xs font-bold ${colors.textMuted} mb-1 flex items-center gap-1`}>
+                        <Cpu size={10} /> Model
+                    </label>
+                    {provider === "openai" ? (
+                        <CustomSelect
+                            value={params.model || "gpt-4o-mini"}
+                            onChange={(val) => onChange({ model: val })}
+                            options={OPENAI_MODELS}
+                        />
+                    ) : (
+                        <input
+                            type="text"
+                            value={params.model || "llama3"}
+                            onChange={(e) => onChange({ model: e.target.value })}
+                            className={`w-full p-2 rounded border ${colors.border} bg-[#0d1117] text-white text-sm outline-none focus:border-blue-500`}
+                            placeholder="e.g. llama3, mistral"
+                        />
+                    )}
+                </div>
+            </div>
+
+            {provider === "ollama" && (
+                <div className="p-2 bg-blue-900/10 border border-blue-700/30 rounded text-[10px] text-blue-400 flex items-start gap-2">
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <span>Make sure the model is pulled in Docker: <code>docker exec -it datasynth-ollama ollama pull {params.model || "llama3"}</code></span>
+                </div>
+            )}
+
             <div>
                 <label className={`block text-xs font-bold ${colors.textMuted} mb-1`}>Prompt Template</label>
                 <textarea

@@ -1,7 +1,7 @@
 from faker import Faker
 from typing import List, Dict, Any, Set, Union
 from models import GeneratorRequest
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 import random
 import rstr
 from jinja2 import Environment, BaseLoader
@@ -22,8 +22,7 @@ class DotAccessWrapper:
 class DataEngine:
     def __init__(self):
         self.faker = Faker()
-        self.client = OpenAI()
-        
+        self.client = OpenAI() 
         self.jinja_env = Environment(loader=BaseLoader())
         
         def filter_slugify(value, separator="."):
@@ -118,19 +117,31 @@ class DataEngine:
         random_row = random.choice(available_rows)
         return (random_row.get(target_column), random_row)
 
-    def _generate_llm_value(self, params: Dict[str, Any], current_row_context: Dict[str, Any], avoid_values: Set[str] = None, retry_count: int = 0) -> str:
+    async def _generate_llm_value(self, params: Dict[str, Any], current_row_context: Dict[str, Any], avoid_values: Set[str] = None, retry_count: int = 0) -> str:
+        provider = params.get("provider", "openai")
         model = params.get("model", "gpt-4o-mini")
         template = params.get("prompt_template", "")
-        base_temp = params.get("temperature", 1.0)
-        top_p = params.get("top_p", 1.0)
-        freq_penalty = params.get("frequency_penalty", 0.0)
-        pres_penalty = params.get("presence_penalty", 0.0)
+        
+        base_temp = float(params.get("temperature", 1.0))
+        top_p = float(params.get("top_p", 1.0))
+        
+        if provider == "ollama":
+            active_client = AsyncOpenAI(
+                base_url="http://ollama:11434/v1",
+                api_key="ollama" 
+            )
+        else:
+            active_client = AsyncOpenAI()
+        
         temperature = min(base_temp + (retry_count * 0.1), 1.5)
+        
         if not template: return "Error: No prompt_template"
+        
         formatting_context = {}
         for k, v in current_row_context.items():
             if isinstance(v, dict): formatting_context[k] = DotAccessWrapper(v)
             else: formatting_context[k] = v
+            
         try:
             formatted_prompt = template.format(**formatting_context)
             if avoid_values and len(avoid_values) > 0:
@@ -139,13 +150,17 @@ class DataEngine:
         except Exception as e: return f"Error formatting prompt: {str(e)}"
         try:
             system_msg = "You are a synthetic data generator. Generate FICTIONAL, CREATIVE data. Output ONE single value."
-            response = self.client.chat.completions.create(
+            
+            response = await active_client.chat.completions.create(
                 model=model,
                 messages=[{"role": "system", "content": system_msg}, {"role": "user", "content": formatted_prompt}],
-                temperature=temperature, max_tokens=150, top_p=top_p, frequency_penalty=freq_penalty, presence_penalty=pres_penalty
+                temperature=temperature, 
+                max_tokens=150, 
+                top_p=top_p
             )
             return response.choices[0].message.content.strip().strip('"')
-        except Exception as e: return f"OpenAI Error: {str(e)}"
+        except Exception as e: 
+            return f"{provider.capitalize()} Error: {str(e)}"
 
     def _resolve_generation_order(self, tables: List[Any]) -> List[Any]:
         id_to_table = {t.id: t for t in tables}
@@ -195,13 +210,12 @@ class DataEngine:
 
             rows_generated_for_table = 0
             
-            BATCH_SIZE = 20
+            BATCH_SIZE = 10
 
             while rows_generated_for_table < table.rows_count:
                 if job_id:
                     await job_manager.check_cancellation(job_id)
-                    
-                    await asyncio.sleep(0.02) 
+                    await asyncio.sleep(0.01) 
 
                 remaining = table.rows_count - rows_generated_for_table
                 current_batch = min(BATCH_SIZE, remaining)
@@ -234,7 +248,10 @@ class DataEngine:
                             elif field.type == "integer": generated_val = self._generate_integer_or_float_value(field.params)
                             elif field.type == "boolean": generated_val = self._generate_boolean_value(field.params)
                             elif field.type == "regex": generated_val = self._generate_regex_value(field.params)
-                            elif field.type == "llm": generated_val = self._generate_llm_value(field.params, context_data, current_avoid_list, attempts)
+                            
+                            elif field.type == "llm": 
+                                generated_val = await self._generate_llm_value(field.params, context_data, current_avoid_list, attempts)
+                            
                             elif field.type == "template": generated_val = self._generate_template_value(field.params, context_data)
                             
                             if field.is_unique:
@@ -261,7 +278,7 @@ class DataEngine:
                 
                 rows_generated_for_table += current_batch
                 current_rows_gen += current_batch
-
+                
                 if job_id and total_rows_to_gen > 0:
                     percent = int((current_rows_gen / total_rows_to_gen) * 100)
                     job_manager.update_progress(job_id, percent)
