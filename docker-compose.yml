@@ -96,7 +96,7 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    # Jeśli masz GPU NVIDIA, odkomentuj poniższe linie:
+    # If you have an NVIDIA GPU and want to enable GPU support, uncomment the following lines
     # deploy:
     #   resources:
     #     reservations:
