@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../../lib/api';
 import { X, Cloud, Trash2, Calendar, Loader2, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { colors } from '../../theme';
 
@@ -29,7 +29,7 @@ function ProjectModal({ onClose, onLoad }) {
     const fetchProjects = async () => {
         try {
             setLoading(true);
-            const res = await axios.get('http://localhost:8000/projects');
+            const res = await api.get('/projects');
             setProjects(res.data);
             setError(null);
         } catch (e) {
@@ -52,7 +52,7 @@ function ProjectModal({ onClose, onLoad }) {
 
     const performDelete = async (id) => {
         try {
-            await axios.delete(`http://localhost:8000/projects/${id}`);
+            await api.delete(`/projects/${id}`);
             showNotification('success', 'Project deleted successfully');
             setDeleteConfirmId(null);
             fetchProjects();

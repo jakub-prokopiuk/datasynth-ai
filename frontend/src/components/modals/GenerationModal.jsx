@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { CheckCircle2, AlertTriangle, FileDown } from 'lucide-react';
 import { colors } from '../../theme';
+import api from '../../lib/api';
 
 function GenerationModal({ onClose, jobId, onComplete }) {
     const [status, setStatus] = useState("initializing");
@@ -14,8 +15,11 @@ function GenerationModal({ onClose, jobId, onComplete }) {
             return;
         }
 
-        console.log("Connecting WS to:", jobId);
-        const socket = new WebSocket(`ws://localhost:8000/ws/jobs/${jobId}`);
+        const baseUrl = import.meta.env.API_URL || "http://localhost:8000";
+        const wsUrl = baseUrl.replace(/^http/, 'ws') + `/ws/jobs/${jobId}`;
+
+        console.log("Connecting WS to:", wsUrl);
+        const socket = new WebSocket(wsUrl);
         ws.current = socket;
 
         socket.onopen = () => console.log("WS Connected");
@@ -44,7 +48,7 @@ function GenerationModal({ onClose, jobId, onComplete }) {
 
     const handleCancel = async () => {
         try {
-            await fetch(`http://localhost:8000/jobs/${jobId}`, { method: 'DELETE' });
+            await api.delete(`/jobs/${jobId}`);
             setStatus("cancelled");
         } catch (e) {
             console.error(e);

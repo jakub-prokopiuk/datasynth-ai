@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Database, Play, HelpCircle } from 'lucide-react';
+import { Database, Play, HelpCircle, LogOut } from 'lucide-react';
 import { colors } from './theme';
 import { useSchema } from './hooks/useSchema';
 import Toast from './components/ui/Toast';
@@ -15,8 +14,11 @@ import ProjectModal from './components/modals/ProjectModal';
 import SaveModal from './components/modals/SaveModal';
 import GenerationModal from './components/modals/GenerationModal';
 import PushModal from './components/modals/PushModal';
+import LoginPage from './components/LoginPage';
+import api from './lib/api';
 
 function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -56,6 +58,11 @@ function App() {
     }
   ]);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+  };
+
   const toggleModal = (modalName, isOpen) => {
     setModals(prev => ({ ...prev, [modalName]: isOpen }));
   };
@@ -85,7 +92,7 @@ function App() {
     if (!saveName.trim()) { showToast('error', "Project name cannot be empty."); return; }
     const payload = { name: saveName, description: config.global_context, schema_data: { config: { ...config, job_name: saveName }, tables: tables } };
     try {
-      await axios.post('http://localhost:8000/projects', payload);
+      await api.post('/projects', payload);
       setConfig(prev => ({ ...prev, job_name: saveName }));
       toggleModal('save', false);
       showToast('success', "Project saved to database successfully!");
@@ -97,7 +104,7 @@ function App() {
   const handleLoadFromCloud = async (projectId) => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:8000/projects/${projectId}`);
+      const res = await api.get(`/projects/${projectId}`);
       const data = res.data;
       if (data.config && Array.isArray(data.tables)) {
         setConfig(data.config);
@@ -155,7 +162,7 @@ function App() {
     };
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/generate/async', payload);
+      const response = await api.post('/generate/async', payload);
       const jobId = response.data.job_id;
 
       setCurrentJobId(jobId);
@@ -169,12 +176,12 @@ function App() {
   const handleJobComplete = async (jobId) => {
     try {
       if (config.output_format === 'json') {
-        const response = await axios.get(`http://127.0.0.1:8000/jobs/${jobId}/result`);
+        const response = await api.get(`/jobs/${jobId}/result`);
         setGeneratedData(response.data);
         toggleModal('generation', false);
         showToast('success', "Data generated!");
       } else {
-        const response = await axios.get(`http://127.0.0.1:8000/jobs/${jobId}/result`, {
+        const response = await api.get(`/jobs/${jobId}/result`, {
           responseType: 'blob'
         });
         const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -204,6 +211,10 @@ function App() {
     a.click();
   };
 
+  if (!token) {
+    return <LoginPage onLogin={(newToken) => setToken(newToken)} />;
+  }
+
   return (
     <div className={`min-h-screen ${colors.bgMain} ${colors.textMain} font-sans flex flex-col md:flex-row selection:bg-blue-500 selection:text-white relative`}>
 
@@ -219,7 +230,7 @@ function App() {
       {modals.help && <HelpModal onClose={() => toggleModal('help', false)} />}
       {modals.template && <TemplateModal onClose={() => toggleModal('template', false)} onSelect={handleLoadTemplate} />}
       {modals.project && <ProjectModal onClose={() => toggleModal('project', false)} onLoad={handleLoadFromCloud} />}
-      
+
       {modals.generation && (
         <GenerationModal
           jobId={currentJobId}
@@ -230,8 +241,8 @@ function App() {
 
       {modals.push && (
         <PushModal
-            onClose={() => toggleModal('push', false)}
-            jobId={currentJobId}
+          onClose={() => toggleModal('push', false)}
+          jobId={currentJobId}
         />
       )}
 
@@ -246,9 +257,14 @@ function App() {
               <p className={`text-xs ${colors.textMuted}`}>Relational Data Generator</p>
             </div>
           </div>
-          <button onClick={() => toggleModal('help', true)} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition">
-            <HelpCircle size={20} />
-          </button>
+          <div className="flex gap-2">
+            <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-red-400 transition" title="Logout">
+              <LogOut size={18} />
+            </button>
+            <button onClick={() => toggleModal('help', true)} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition">
+              <HelpCircle size={20} />
+            </button>
+          </div>
         </div>
 
         <GlobalConfig

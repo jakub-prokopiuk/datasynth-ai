@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../../lib/api';
 import { Database, X, Check, AlertTriangle, UploadCloud, Loader2 } from 'lucide-react';
 import { colors } from '../../theme';
 
@@ -12,7 +12,7 @@ function PushModal({ onClose, jobId }) {
         setStatus("testing");
         setMessage(null);
         try {
-            await axios.post('http://localhost:8000/connectors/test', { connection_string: connString });
+            await api.post('/connectors/test', { connection_string: connString });
             setStatus("idle");
             alert("Connection successful!");
         } catch (err) {
@@ -25,7 +25,7 @@ function PushModal({ onClose, jobId }) {
         setStatus("pushing");
         setMessage(null);
         try {
-            await axios.post('http://localhost:8000/connectors/push', {
+            await api.post('/connectors/push', {
                 job_id: jobId,
                 connection_string: connString
             });
